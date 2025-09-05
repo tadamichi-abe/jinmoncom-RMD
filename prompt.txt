@@ -1,0 +1,95 @@
+あなたは古代ローマ軍籍証（diplomata militaria）とラテン語碑文の専門家です．
+以下の本文とメタデータから指定項目を抽出し、**厳密に JSON のみ**を出力してください．
+本文に無い情報の**推測・補完は禁止**。不明な項目は **JSON の null** を返してください．
+
+まず，以下の具体例を参考に，入力と出力の形式を学習してください．
+
+--- ここから具体例 ---
+{few_shot_examples}
+--- ここまで具体例 ---
+
+上記の例を参考に，以下の新しいデータから情報を抽出してください．
+
+# 出力スキーマ（キー固定・順不同可）
+{{
+    "EDCS_ID": "string or integer",
+    "publication": "string or null",
+    "year": "string or null",
+    "province": "string or null",
+    "emperor": "string", "...",
+    "units": "string", "...",
+    "provincia": "string or null",
+    "governor_name": "string or null",
+    "rights": "string", "...",
+    "commander_name": "string or null",
+    "soldier_unit": "string or null",
+    "soldier_name": "string or null",
+    "soldier_origin": "string or null",
+    "honesta missio": "string ('y', 'n', 'both') or null",
+    "include children": "string ('y', 'n') or null"
+}}
+
+## 正規化と抽出ルール
+1) EDCS_ID, publication, province
+- いずれも入力メタデータの値をそのまま返してください．一切の書き換えを禁じます．
+
+2) year
+- year は文字列で返してください．例えば，'dating_from' と 'dating_to' が同年なら "217"、異なる年なら "217-225"。小数（.0）禁止。記号はenダッシュ（-）．
+
+3) emperor
+- 本文の皇帝称号から、**ラテン語主格の通称**に正規化（Imperator, Caesar, Augustus 等の称号は除去）。
+- 共同皇帝が併記される場合は**すべて**を配列で返す（碑文の記載順）。例：["Marcus Aurelius", "Lucius Verus"]。
+- 本文から特定できないときは，year欄の数字を使って"{date_from}年–{date_to}年の皇帝" と返してください（整数表記、enダッシュ(–) を使用、小数禁止）。
+
+4) units
+- 形式：**種別 + ローマ数字序数 + 民族名属格 + 特性語（任意）** に正規化。
+- 省略展開：’al.’→’ala’, ‘coh.’→’cohors’, ‘cl.’→’classis’, ‘eq. sing.’→’equites singulares’。
+
+5) governor_name, provincia, rights, commander_name, soldier_unit, soldier_name, soldier_origin
+- いずれも本文に基づく。見つからなければ null。
+
+6) honesta missio
+- **'y'**: 名誉除隊した**退役兵のみ**が対象の場合。’dimissis honesta missione’ (名誉除隊によって満期服務した) のような句を探してください。
+- **'n'**: **現役兵のみ**が対象の場合。’dimissis honesta missione’のような句が見つからない場合は、現役兵のみが対象とします。
+- **'both'**: **現役兵と退役兵の両方**が対象の場合。
+- 不明な場合は ‘null’ を返してください。
+
+7) include children
+- **'y'**: civitasが子供にも与えられる場合。’liberis posterisque eorum’のような句を探してください。
+- **'n'**: 兵士にcivitasを与える文はあるものの、子供に関する記述がない場合は 'n' を返してください。
+- 不明な場合は ‘null’ を返してください。
+
+## 本文解釈の注意事項
+- 改行・スラッシュ分割は語を結合（’milita/ver(unt)’→’militaverunt’）して解釈してください。
+- 以下の校訂記号の意味を理解し、碑文を正しく解釈してください。例えば ‘()’ は省略語の補完、’[]’ は校訂者による欠損部の補填を意味します。
+
+
+| 記号 | 意味 |
+| `( )` | 省略語の補完、欠落文字の挿入 |
+| `[ ]` | 校訂者によるテキスト欠損部の補填 |
+| `[ 3 ]` | 行内の3文字分の空白 |
+| `[ 6 ]` | 6行分の空白行 |
+| `]` | 行頭の長さ不明の空白 |
+| `[` | 行末の長さ不明の空白 |
+| `⟦ ⟧` | 削除されたテキスト |
+| `<e=F>` | 誤記の訂正 (例: `f<e=F>cit` は `FFCIT` の訂正) |
+| `«TEXT»` | 削除された箇所を埋めるために後から追記されたテキスト |
+| `«⟦ ⟧»` | 一度削除され、再度刻まれたテキスト |
+| `{{ }}` | 校訂者によって削除された文字 |
+| `/` | 行の区切り |
+| `//` | 石碑の表裏など、異なるテキスト部分の区切り |
+| `*` | 偽造または現代の碑文である可能性を示す |
+| `+` | 書誌情報やコメントへの参照を示す |
+
+---
+# 抽出対象データ
+
+## メタデータ
+- EDCS_ID: {edcs_id}
+- publication: {publication}
+- province: {province}
+- dating_from: {date_from}
+- dating_to: {date_to}
+
+## 本文
+{inscription_text}
